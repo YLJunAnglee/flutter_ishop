@@ -1,113 +1,146 @@
+import 'package:dio/dio.dart';
+import 'package:flustars/flustars.dart';
 import 'package:flutter/material.dart';
+import 'package:lj_ishop/demo/demo_page.dart';
+import 'package:lj_ishop/home/splash_page.dart';
+import 'package:lj_ishop/login/page/login_page.dart';
+import 'package:lj_ishop/net/dio_utils.dart';
+import 'package:lj_ishop/net/intercept.dart';
+import 'package:lj_ishop/res/constant.dart';
+import 'package:lj_ishop/routers/not_found_page.dart';
+import 'package:lj_ishop/routers/routers.dart';
+import 'package:lj_ishop/setting/locale_provider.dart';
+import 'package:lj_ishop/setting/theme_provider.dart';
+import 'package:lj_ishop/util/device_utils.dart';
+import 'package:lj_ishop/util/handle_error_utils.dart';
+import 'package:lj_ishop/util/log_utils.dart';
+import 'package:lj_ishop/util/theme_utils.dart';
+import 'package:oktoast/oktoast.dart';
+import 'package:provider/provider.dart';
+import 'package:quick_actions/quick_actions.dart';
+import 'package:url_strategy/url_strategy.dart';
 
-void main() {
-  runApp(MyApp());
+Future<void> main() async {
+  /// 确保初始化完成
+  WidgetsFlutterBinding.ensureInitialized();
+
+  /// 去除URL中的“#”(hash)，仅针对Web。默认为setHashUrlStrategy
+  /// 注意本地部署和远程部署时`web/index.html`中的base标签，https://github.com/flutter/flutter/issues/69760
+  setPathUrlStrategy();
+
+  /// sp初始化
+  SpUtil.getInstance();
+
+  /// 异常处理
+  handleError(runApp(MyApp(
+    home: LoginPage(),
+  )));
 }
 
 class MyApp extends StatelessWidget {
-  // This widget is the root of your application.
+  final Widget? home;
+  final ThemeData? theme;
+  static GlobalKey<NavigatorState> navigatorKey = GlobalKey();
+
+  MyApp({Key? key, this.home, this.theme}) : super(key: key) {
+    Log.init();
+    initDio();
+    Routes.initRoutes();
+    initQuickActions();
+  }
+
+  /// 初始化网络请求
+  void initDio() {
+    final List<Interceptor> interceptors = <Interceptor>[];
+
+    /// 统一添加身份验证请求头
+    interceptors.add(AuthInterceptor());
+
+    /// 刷新token
+    interceptors.add(TokenInterceptor());
+
+    /// 打印Log(生产模式去除)
+    if (!Constant.inProduction) {
+      interceptors.add(LoggingInterceptor());
+    }
+
+    /// 适配数据（根据自己的数据结构，可自行选择添加）
+    interceptors.add(AdapterInterceptor());
+    configDio(baseUrl: 'https://api.github.com/', interceptors: interceptors);
+  }
+
+  void initQuickActions() {
+    if (Device.isMobile) {
+      const QuickActions quickActions = QuickActions();
+      if (Device.isIOS) {
+        quickActions.initialize((String shortcutType) {
+          if (shortcutType == 'demo') {
+            navigatorKey.currentState?.push<dynamic>(MaterialPageRoute<dynamic>(
+              builder: (BuildContext context) => DemoPage(),
+            ));
+          }
+        });
+      }
+
+      quickActions.setShortcutItems(<ShortcutItem>[
+        const ShortcutItem(
+            type: 'demo', localizedTitle: 'Demo', icon: 'flutter_dash_black')
+      ]);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // Try running your application with "flutter run". You'll see the
-        // application has a blue toolbar. Then, without quitting the app, try
-        // changing the primarySwatch below to Colors.green and then invoke
-        // "hot reload" (press "r" in the console where you ran "flutter run",
-        // or simply save your changes to "hot reload" in a Flutter IDE).
-        // Notice that the counter didn't reset back to zero; the application
-        // is not restarted.
-        primarySwatch: Colors.blue,
-      ),
-      home: MyHomePage(title: 'Flutter Demo Home Page'),
+    final Widget app = MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => LocaleProvider())
+      ],
+      child: Consumer2<ThemeProvider, LocaleProvider>(builder:
+          (_, ThemeProvider provider, LocaleProvider localeProvider, __) {
+        return _buildMaterialApp(provider, localeProvider);
+      }),
+    );
+
+    /// Toast配置
+    return OKToast(
+      child: app,
+      backgroundColor: Colors.black54,
+      textPadding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+      radius: 20.0,
+      position: ToastPosition.bottom,
     );
   }
-}
 
-class MyHomePage extends StatefulWidget {
-  MyHomePage({Key? key, required this.title}) : super(key: key);
+  Widget _buildMaterialApp(
+      ThemeProvider provider, LocaleProvider localeProvider) {
+    return MaterialApp(
+      title: 'Flutter Deer',
+      theme: theme ?? provider.getTheme(),
+      darkTheme: provider.getTheme(isDarkMode: true),
+      themeMode: provider.getThemeMode(),
+      home: home ?? SplashPage(),
+      onGenerateRoute: Routes.router.generator,
+      locale: localeProvider.locale,
+      navigatorKey: navigatorKey,
+      builder: (BuildContext context, Widget? child) {
+        /// 仅针对安卓
+        if (Device.isAndroid) {
+          /// 切换深色模式会触发此方法，这里设置导航栏颜色
+          ThemeUtils.setSystemNavigationBar(provider.getThemeMode());
+        }
+        return MediaQuery(
+            data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
+            child: child!);
+      },
 
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
-
-  @override
-  _MyHomePageState createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Invoke "debug painting" (press "p" in the console, choose the
-          // "Toggle Debug Paint" action from the Flutter Inspector in Android
-          // Studio, or the "Toggle Debug Paint" command in Visual Studio Code)
-          // to see the wireframe for each widget.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Text(
-              'You have pushed the button this many times:',
-            ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headline4,
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+      /// 因为使用了fluro，这里设置主要针对Web
+      onUnknownRoute: (_) {
+        return MaterialPageRoute<void>(
+          builder: (BuildContext context) => const NotFoundPage(),
+        );
+      },
+      restorationScopeId: 'app',
     );
   }
 }
