@@ -1,10 +1,17 @@
+import 'package:flustars/flustars.dart';
 import 'package:flutter/material.dart';
+import 'package:lj_ishop/login/login_router.dart';
 import 'package:lj_ishop/login/widgets/my_text_field.dart';
+import 'package:lj_ishop/res/constant.dart';
 import 'package:lj_ishop/res/gaps.dart';
 import 'package:lj_ishop/res/styles.dart';
+import 'package:lj_ishop/routers/fluro_navigator.dart';
+import 'package:lj_ishop/store/store_router.dart';
+import 'package:lj_ishop/util/change_notifier_manager.dart';
 import 'package:lj_ishop/widgets/my_app_bar.dart';
 import 'package:lj_ishop/widgets/my_button.dart';
 import 'package:lj_ishop/widgets/my_scroll_view.dart';
+import 'package:lj_ishop/util/other_utils.dart';
 
 class LoginPage extends StatefulWidget {
   LoginPage({Key? key}) : super(key: key);
@@ -13,7 +20,8 @@ class LoginPage extends StatefulWidget {
   _LoginPageState createState() => _LoginPageState();
 }
 
-class _LoginPageState extends State<LoginPage> {
+class _LoginPageState extends State<LoginPage>
+    with ChangeNotifierMixin<LoginPage> {
   /// controller
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
@@ -21,7 +29,49 @@ class _LoginPageState extends State<LoginPage> {
   final FocusNode _nodeText2 = FocusNode();
   bool _clickable = false;
 
-  void _login() {}
+  /// 添加状态变化监控
+  @override
+  Map<ChangeNotifier?, List<VoidCallback>?>? changeNotifier() {
+    final List<VoidCallback> callbacks = <VoidCallback>[_verify];
+    return <ChangeNotifier, List<VoidCallback>?>{
+      _nameController: callbacks,
+      _passwordController: callbacks,
+      _nodeText1: null,
+      _nodeText2: null,
+    };
+  }
+
+  void _login() {
+    SpUtil.putString(Constant.phone, _nameController.text);
+    NavigatorUtils.push(context, StoreRouter.auditPage);
+  }
+
+  void _verify() {
+    final String name = _nameController.text;
+    final String password = _passwordController.text;
+    bool clickable = true;
+    if (name.isEmpty || name.length < 11) {
+      clickable = false;
+    }
+    if (password.isEmpty || password.length < 6) {
+      clickable = false;
+    }
+
+    /// 状态不一样再刷新，避免不必要的setState
+    if (clickable != _clickable) {
+      setState(() {
+        _clickable = clickable;
+      });
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+
+    WidgetsBinding.instance!.addPostFrameCallback((_) {});
+    _nameController.text = SpUtil.getString(Constant.phone).nullSafe;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -29,9 +79,13 @@ class _LoginPageState extends State<LoginPage> {
       appBar: MyAppBar(
         isBack: false,
         actionName: '验证码登录',
-        onPressed: () {},
+        onPressed: () {
+          NavigatorUtils.push(context, LoginRouter.smsLoginPage);
+        },
       ),
       body: MyScrollView(
+        keyboardConfig: Utils.getKeyboardActionsConfig(
+            context, <FocusNode>[_nodeText1, _nodeText2]),
         padding: EdgeInsets.only(left: 16.0, right: 16.0, top: 20.0),
         children: _buildBody,
       ),
@@ -75,7 +129,9 @@ class _LoginPageState extends State<LoginPage> {
               key: const Key('forgotPassword'),
               style: Theme.of(context).textTheme.subtitle2,
             ),
-            onTap: () {},
+            onTap: () {
+              NavigatorUtils.push(context, LoginRouter.resetPasswordPage);
+            },
           ),
         ),
         Gaps.vGap16,
@@ -87,7 +143,9 @@ class _LoginPageState extends State<LoginPage> {
               key: const Key('noAccountRegister'),
               style: TextStyle(color: Theme.of(context).primaryColor),
             ),
-            onTap: () {},
+            onTap: () {
+              NavigatorUtils.push(context, LoginRouter.registerPage);
+            },
           ),
         )
       ];
