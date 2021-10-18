@@ -69,6 +69,7 @@ class MyScrollView extends StatelessWidget {
 
     if (bottomButton != null) {
       contents = Column(
+        crossAxisAlignment: crossAxisAlignment,
         children: [Expanded(child: contents), SafeArea(child: bottomButton!)],
       );
     }

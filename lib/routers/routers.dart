@@ -6,6 +6,7 @@ import 'package:lj_ishop/login/home/home_page.dart';
 import 'package:lj_ishop/login/home/webview_page.dart';
 import 'package:lj_ishop/login/login_router.dart';
 import 'package:lj_ishop/routers/i_router.dart';
+import 'package:lj_ishop/shop/shop_router.dart';
 import 'package:lj_ishop/store/store_router.dart';
 
 import 'not_found_page.dart';
@@ -40,6 +41,7 @@ class Routes {
     /// 各自路由由各自模块管理，统一在此添加初始化
     _listRouter.add(LoginRouter());
     _listRouter.add(StoreRouter());
+    _listRouter.add(ShopRouter());
 
     /// 初始化路由
     void initRouter(IRouterProvider routerProvider) {
